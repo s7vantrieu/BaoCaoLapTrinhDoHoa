@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
@@ -39,6 +40,12 @@ public class ProceduralTerrain : MonoBehaviour
 
     private Mesh terrainMesh;
 
+    // --- GPU Instancing (Grass) ---
+    private List<Matrix4x4[]> grassBatches;
+    private Mesh singleGrassMesh;
+    private MaterialPropertyBlock grassPropertyBlock;
+    private const int INSTANCED_BATCH_SIZE = 1023; // Unity giới hạn tối đa 1023 instance/lần gọi
+
     void Start()
     {
         // 1. TỰ ĐỘNG VẼ ẢNH HEIGHTMAP NẾU BẬT USE SEED
@@ -55,7 +62,7 @@ public class ProceduralTerrain : MonoBehaviour
         if (generateWater) GenerateWaterLayer();
 
         // 4. Trồng Cỏ
-        if (generateGrass) GenerateGrassLayer();
+        if (generateGrass) GenerateGrassInstanced();
     }
 
     // --- THUẬT TOÁN SINH ĐẢO THEO SEED ---
@@ -222,25 +229,20 @@ public class ProceduralTerrain : MonoBehaviour
         if (waterMaterial != null) waterRenderer.material = waterMaterial;
     }
 
-    void GenerateGrassLayer()
+    // --- GPU INSTANCING: Thay thế GenerateGrassLayer() ---
+    void GenerateGrassInstanced()
     {
         if (grassMaterial == null || heightMap == null) return;
 
-        GameObject grassObj = new GameObject("Procedural Grass Container");
-        grassObj.transform.SetParent(this.transform);
-        grassObj.transform.localPosition = Vector3.zero;
+        // Bật GPU Instancing trên material
+        grassMaterial.enableInstancing = true;
 
-        MeshFilter grassFilter = grassObj.AddComponent<MeshFilter>();
-        MeshRenderer grassRenderer = grassObj.AddComponent<MeshRenderer>();
+        // Tạo mesh 1 ngọn cỏ (X-cross) dùng chung cho mọi instance
+        singleGrassMesh = CreateSingleGrassMesh();
+        grassPropertyBlock = new MaterialPropertyBlock();
 
-        Vector3[] vertices = new Vector3[grassCount * 8];
-        Vector2[] uvs = new Vector2[grassCount * 8];
-        int[] triangles = new int[grassCount * 12];
-
-        int vertIndex = 0, trisIndex = 0;
-
-        // Dùng seed cố định cho cỏ để nếu không đổi Map, cỏ luôn mọc chỗ cũ
-        Random.InitState(seed); 
+        var matrices = new List<Matrix4x4>();
+        Random.InitState(seed);
 
         for (int i = 0; i < grassCount; i++)
         {
@@ -248,60 +250,72 @@ public class ProceduralTerrain : MonoBehaviour
             float randZ = Random.Range(-depth / 2f, depth / 2f);
 
             float hValue = GetHeightMapValue(randX, randZ);
-            float yPos = (hValue * mountainHeight) + grassYOffset;
+            float yPos   = hValue * mountainHeight + grassYOffset;
 
             if (yPos < waterLevel + 0.5f || hValue > 0.5f) continue;
 
             float size = Random.Range(grassSize * 0.7f, grassSize * 1.3f);
-            float halfSize = size / 2f;
-            Vector3 basePos = new Vector3(randX, yPos, randZ);
-            
-            float randomAngle = Random.Range(0f, 360f) * Mathf.Deg2Rad;
-            Vector3 right1 = new Vector3(Mathf.Cos(randomAngle), 0, Mathf.Sin(randomAngle)) * halfSize;
-            Vector3 right2 = new Vector3(-Mathf.Sin(randomAngle), 0, Mathf.Cos(randomAngle)) * halfSize;
-            Vector3 up = Vector3.up * size * 2f;
+            float rotY  = Random.Range(0f, 360f);
 
-            vertices[vertIndex + 0] = basePos - right1;
-            vertices[vertIndex + 1] = basePos + right1;
-            vertices[vertIndex + 2] = basePos - right1 + up;
-            vertices[vertIndex + 3] = basePos + right1 + up;
-
-            uvs[vertIndex + 0] = new Vector2(0, 0); uvs[vertIndex + 1] = new Vector2(1, 0);
-            uvs[vertIndex + 2] = new Vector2(0, 1); uvs[vertIndex + 3] = new Vector2(1, 1);
-
-            triangles[trisIndex + 0] = vertIndex;     triangles[trisIndex + 1] = vertIndex + 2;
-            triangles[trisIndex + 2] = vertIndex + 1; triangles[trisIndex + 3] = vertIndex + 1;
-            triangles[trisIndex + 4] = vertIndex + 2; triangles[trisIndex + 5] = vertIndex + 3;
-
-            vertices[vertIndex + 4] = basePos - right2;
-            vertices[vertIndex + 5] = basePos + right2;
-            vertices[vertIndex + 6] = basePos - right2 + up;
-            vertices[vertIndex + 7] = basePos + right2 + up;
-
-            uvs[vertIndex + 4] = new Vector2(0, 0); uvs[vertIndex + 5] = new Vector2(1, 0);
-            uvs[vertIndex + 6] = new Vector2(0, 1); uvs[vertIndex + 7] = new Vector2(1, 1);
-
-            triangles[trisIndex + 6] = vertIndex + 4; triangles[trisIndex + 7] = vertIndex + 6;
-            triangles[trisIndex + 8] = vertIndex + 5; triangles[trisIndex + 9] = vertIndex + 5;
-            triangles[trisIndex + 10]= vertIndex + 6; triangles[trisIndex + 11]= vertIndex + 7;
-
-            vertIndex += 8; trisIndex += 12;
+            // Mỗi ngọn cỏ là 1 Matrix4x4 (vị trí + xoay Y ngẫu nhiên + scale)
+            matrices.Add(Matrix4x4.TRS(
+                new Vector3(randX, yPos, randZ),
+                Quaternion.Euler(0f, rotY, 0f),
+                Vector3.one * size
+            ));
         }
 
-        Mesh combinedGrassMesh = new Mesh();
-        combinedGrassMesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
-        
-        Vector3[] finalV = new Vector3[vertIndex]; System.Array.Copy(vertices, finalV, vertIndex);
-        int[] finalT = new int[trisIndex];         System.Array.Copy(triangles, finalT, trisIndex);
-        Vector2[] finalU = new Vector2[vertIndex]; System.Array.Copy(uvs, finalU, vertIndex);
-        
-        combinedGrassMesh.vertices = finalV;
-        combinedGrassMesh.triangles = finalT;
-        combinedGrassMesh.uv = finalU;
+        // Pre-slice thành các mảng ≤ 1023 để tránh GC allocation mỗi frame
+        grassBatches = new List<Matrix4x4[]>();
+        for (int i = 0; i < matrices.Count; i += INSTANCED_BATCH_SIZE)
+        {
+            int count = Mathf.Min(INSTANCED_BATCH_SIZE, matrices.Count - i);
+            var batch = new Matrix4x4[count];
+            matrices.CopyTo(i, batch, 0, count);
+            grassBatches.Add(batch);
+        }
+    }
 
-        combinedGrassMesh.RecalculateNormals();
-        grassFilter.mesh = combinedGrassMesh;
-        grassRenderer.material = grassMaterial;
+    // Mesh 1 ngọn cỏ hình chữ X (8 đỉnh, 12 tam giác, render 2 mặt)
+    Mesh CreateSingleGrassMesh()
+    {
+        float hw = 0.5f, h = 1f;
+        var verts = new Vector3[]
+        {
+            // Quad 1 (song song trục Z)
+            new Vector3(-hw, 0f,    0f), new Vector3(hw, 0f,    0f),
+            new Vector3(-hw, h*2f, 0f), new Vector3(hw, h*2f, 0f),
+            // Quad 2 (song song trục X)
+            new Vector3(0f, 0f,    -hw), new Vector3(0f, 0f,    hw),
+            new Vector3(0f, h*2f, -hw), new Vector3(0f, h*2f, hw),
+        };
+        var uvs = new Vector2[]
+        {
+            new Vector2(0,0), new Vector2(1,0), new Vector2(0,1), new Vector2(1,1),
+            new Vector2(0,0), new Vector2(1,0), new Vector2(0,1), new Vector2(1,1),
+        };
+        // Mỗi quad có 2 mặt (front + back) → Cull Off trong shader
+        var tris = new int[]
+        {
+            0,2,1, 1,2,3,  // Quad 1 front
+            1,2,0, 3,2,1,  // Quad 1 back
+            4,6,5, 5,6,7,  // Quad 2 front
+            5,6,4, 7,6,5,  // Quad 2 back
+        };
+        var m = new Mesh { name = "GrassBlade_Instanced" };
+        m.vertices  = verts;
+        m.uv        = uvs;
+        m.triangles = tris;
+        m.RecalculateNormals();
+        return m;
+    }
+
+    // Gọi mỗi frame: GPU vẽ tất cả instance không cần GameObject
+    void Update()
+    {
+        if (grassBatches == null || singleGrassMesh == null || grassMaterial == null) return;
+        foreach (var batch in grassBatches)
+            Graphics.DrawMeshInstanced(singleGrassMesh, 0, grassMaterial, batch, batch.Length, grassPropertyBlock);
     }
 
     float GetHeightMapValue(float worldX, float worldZ)

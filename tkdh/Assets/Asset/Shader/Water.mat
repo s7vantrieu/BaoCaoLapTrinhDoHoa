@@ -7,7 +7,7 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: Diorama_Water_Interactive
+  m_Name: Water
   m_Shader: {fileID: 4800000, guid: 14300addbe3ab7244a32bd1987743d4e, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
@@ -46,8 +46,8 @@ Material:
     - _BaseColor: {r: 0, g: 0.39999998, b: 0.6, a: 0.8}
     - _Color: {r: 0.19999996, g: 0.6, b: 0.9, a: 0.8}
     - _RipplePos: {r: -0.82602096, g: 5.08, b: -5.669695, a: 0}
-    - _Scroll1: {r: 0.005, g: 0.005, b: 0, a: 0}
-    - _Scroll2: {r: -0.003, g: 0.008, b: 0, a: 0}
+    - _Scroll1: {r: 0.01, g: 0.01, b: 0, a: 0}
+    - _Scroll2: {r: -0.006, g: 0.016, b: 0, a: 0}
     - _WaterColor: {r: 0.19999996, g: 0.6, b: 0.9, a: 0.8}
     - _WaveA: {r: 1, g: 0, b: 0.5, a: 10}
     - _WaveB: {r: 0, g: 1, b: 0.3, a: 15}

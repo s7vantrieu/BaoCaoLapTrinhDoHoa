@@ -26,6 +26,9 @@ Shader "Diorama/URP_Grass_3DVolume"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            // Bật GPU Instancing: mỗi instance tự mang matrix riêng
+            #pragma multi_compile_instancing
+
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
@@ -33,6 +36,8 @@ Shader "Diorama/URP_Grass_3DVolume"
                 float4 positionOS : POSITION;
                 float2 uv : TEXCOORD0;
                 float3 normalOS : NORMAL;
+                // Bắt buộc: Unity dùng slot này để inject per-instance ID
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             struct Varyings {
@@ -40,6 +45,7 @@ Shader "Diorama/URP_Grass_3DVolume"
                 float2 uv : TEXCOORD0;
                 float3 positionWS : TEXCOORD1;
                 float3 normalWS : NORMAL;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
             sampler2D _BaseMap;
@@ -52,29 +58,37 @@ Shader "Diorama/URP_Grass_3DVolume"
 
             Varyings vert(Attributes IN) {
                 Varyings OUT;
+
+                // Thiết lập instance ID để Unity biết đang xử lý instance nào
+                UNITY_SETUP_INSTANCE_ID(IN);
+                UNITY_TRANSFER_INSTANCE_ID(IN, OUT);
+
+                // TransformObjectToWorld tự dùng per-instance matrix từ grassBatches[]
                 float3 worldPos = TransformObjectToWorld(IN.positionOS.xyz);
-                
+
                 // GIÓ THỔI: Chỉ thổi phần ngọn (uv.y > 0)
                 float windX = sin(_Time.y * _WindSpeed + worldPos.x) * _WindStrength * IN.uv.y;
                 float windZ = cos(_Time.y * _WindSpeed * 0.8 + worldPos.z) * _WindStrength * IN.uv.y;
-                
+
                 worldPos.x += windX;
                 worldPos.z += windZ;
-                
+
                 OUT.positionCS = TransformWorldToHClip(worldPos);
                 OUT.positionWS = worldPos;
                 OUT.uv = IN.uv;
 
                 // Fix Normals cho mặt sau của lá cỏ (luôn hướng lên trên để đón ánh sáng mặt trời)
-                OUT.normalWS = float3(0, 1, 0); 
+                OUT.normalWS = float3(0, 1, 0);
 
                 return OUT;
             }
 
             half4 frag(Varyings IN) : SV_Target {
+                UNITY_SETUP_INSTANCE_ID(IN);
+
                 // 1. Lấy màu ảnh và cắt viền
                 half4 texColor = tex2D(_BaseMap, IN.uv);
-                clip(texColor.a - _Cutoff); 
+                clip(texColor.a - _Cutoff);
 
                 // 2. Tính ánh sáng sương sương cho nổi khối
                 Light mainLight = GetMainLight();

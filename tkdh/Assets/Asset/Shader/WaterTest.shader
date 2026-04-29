@@ -1,4 +1,4 @@
-Shader "Diorama/URP_Water_Optimized"
+Shader "URP_Water_Optimized"
 {
     Properties
     {

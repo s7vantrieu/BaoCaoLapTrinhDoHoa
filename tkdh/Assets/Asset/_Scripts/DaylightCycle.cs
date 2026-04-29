@@ -8,44 +8,34 @@ public class DaylightCycle : MonoBehaviour
     [Header("Time Settings")]
     [Tooltip("Thời gian hiện tại trong ngày (0.0 đến 24.0)")]
     [Range(0f, 24f)]
-    public float currentTimeOfDay = 10.96f; // Khởi tạo ở 10:58 AM
+    public float currentTimeOfDay = 12.96f; // Gần 1h chiều 
     
-    [Tooltip("Tốc độ trôi của thời gian. 1 = thời gian thực. 60 = 1 giây ngoài đời bằng 1 phút trong game")]
     public float timeMultiplier = 60f; 
+    public float sunTilt = 50f; 
 
-    [Header("Sun Angles")]
-    public float sunTilt = 50f; // Độ nghiêng của trục mặt trời (để bóng đổ có độ chéo đẹp)
+    [Header("Cloud & Environment")]
+    public Material cloudMaterial; // Kéo CloudMat vào đây
+    [Tooltip("Dải màu của mây theo thời gian (Từ 0h đến 24h)")]
+    public Gradient cloudColorGradient; 
 
     void Update()
     {
         UpdateTime();
         UpdateSunRotation();
         UpdateSunIntensity();
+        UpdateCloudColor(); // Gọi hàm cập nhật màu mây
     }
 
     void UpdateTime()
     {
-        // Tăng thời gian theo frame
         currentTimeOfDay += (Time.deltaTime / 3600f) * timeMultiplier;
-
-        // Reset về 0 khi qua ngày mới
-        if (currentTimeOfDay >= 24f)
-        {
-            currentTimeOfDay = 0f;
-        }
+        if (currentTimeOfDay >= 24f) currentTimeOfDay = 0f;
     }
 
     void UpdateSunRotation()
     {
         if (sunLight == null) return;
-
-        // Bản đồ hóa 24 giờ thành 360 độ:
-        // 0h: -90 độ (Dưới đất)
-        // 6h sáng: 0 độ (Chân trời)
-        // 12h trưa: 90 độ (Đỉnh đầu)
-        // 18h tối: 180 độ (Chân trời lặn)
         float sunAngle = (currentTimeOfDay / 24f) * 360f - 90f;
-        
         sunLight.transform.rotation = Quaternion.Euler(sunAngle, sunTilt, 0f);
     }
 
@@ -53,26 +43,33 @@ public class DaylightCycle : MonoBehaviour
     {
         if (sunLight == null) return;
 
-        // Bật tắt/giảm sáng bóng đổ khi đêm xuống
-        if (currentTimeOfDay <= 5f || currentTimeOfDay >= 19f)
-        {
-            // Ban đêm
+        if (currentTimeOfDay <= 5f || currentTimeOfDay >= 19f) {
             sunLight.intensity = Mathf.MoveTowards(sunLight.intensity, 0.1f, Time.deltaTime);
         }
-        else if (currentTimeOfDay > 5f && currentTimeOfDay < 7f)
-        {
-            // Bình minh: sáng dần
+        else if (currentTimeOfDay > 5f && currentTimeOfDay < 7f) {
             sunLight.intensity = Mathf.MoveTowards(sunLight.intensity, 1f, Time.deltaTime * 0.5f);
         }
-        else if (currentTimeOfDay > 17f && currentTimeOfDay < 19f)
-        {
-            // Hoàng hôn: tối dần
+        else if (currentTimeOfDay > 17f && currentTimeOfDay < 19f) {
             sunLight.intensity = Mathf.MoveTowards(sunLight.intensity, 0.1f, Time.deltaTime * 0.5f);
         }
-        else
-        {
-            // Ban ngày
+        else {
             sunLight.intensity = 1f;
+        }
+    }
+
+    // --- HÀM MỚI: ĐỔI MÀU MÂY THEO THỜI GIAN ---
+    void UpdateCloudColor()
+    {
+        if (cloudMaterial != null)
+        {
+            // Chuyển thời gian (0-24) thành dải phần trăm (0.0 - 1.0) để lấy màu trong Gradient
+            float timePercent = currentTimeOfDay / 24f;
+            
+            // Lấy màu tương ứng trên thanh Gradient
+            Color currentColor = cloudColorGradient.Evaluate(timePercent);
+            
+            // Đẩy màu vào Shader Mây
+            cloudMaterial.SetColor("_CloudColor", currentColor);
         }
     }
 }
