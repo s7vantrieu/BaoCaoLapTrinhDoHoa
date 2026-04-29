@@ -7,8 +7,8 @@ Material:
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_Name: ProceduralClouds
-  m_Shader: {fileID: 4800000, guid: 4661c0342f4d7a14ba9fe73f313a38dc, type: 3}
+  m_Name: Custom_URP_Pixelate
+  m_Shader: {fileID: 4800000, guid: 60c9697dad9d1bb4ca2ec5196b3ba225, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords: []
@@ -25,10 +25,12 @@ Material:
     m_TexEnvs: []
     m_Ints: []
     m_Floats:
-    - _Density: 0.76
-    - _Scale: 15
-    - _Softness: 0.5
-    - _Speed: 0.5
-    m_Colors:
-    - _CloudColor: {r: 0.03151244, g: 0.03151244, b: 0.03151244, a: 1}
+    - _DitherColorSteps: 8
+    - _EnableDithering: 0
+    - _EnablePixelation: 0
+    - _EnableScanlines: 0
+    - _PixelSize: 0.004
+    - _ScanlineCount: 500
+    - _ScanlineIntensity: 0.4
+    m_Colors: []
   m_BuildTextureStacks: []
