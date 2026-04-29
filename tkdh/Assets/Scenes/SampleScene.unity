@@ -970,8 +970,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   sunLight: {fileID: 410087040}
-  currentTimeOfDay: 10.96
-  timeMultiplier: 2500
+  currentTimeOfDay: 12
+  timeMultiplier: 0
   sunTilt: 50
   cloudMaterial: {fileID: 2100000, guid: 1e40c3adb7565d94fb9c0dcf85da42ca, type: 2}
   cloudColorGradient:
