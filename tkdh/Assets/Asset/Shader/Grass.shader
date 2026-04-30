@@ -28,9 +28,13 @@ Shader "Diorama/URP_Grass_3DVolume"
             #pragma fragment frag
             // Bật GPU Instancing: mỗi instance tự mang matrix riêng
             #pragma multi_compile_instancing
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS
+            #pragma multi_compile _ _MAIN_LIGHT_SHADOWS_CASCADE
+            #pragma multi_compile _ _SHADOWS_SOFT
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
 
             struct Attributes {
                 float4 positionOS : POSITION;
@@ -45,6 +49,7 @@ Shader "Diorama/URP_Grass_3DVolume"
                 float2 uv : TEXCOORD0;
                 float3 positionWS : TEXCOORD1;
                 float3 normalWS : NORMAL;
+                float4 shadowCoord : TEXCOORD2;
                 UNITY_VERTEX_INPUT_INSTANCE_ID
             };
 
@@ -76,6 +81,7 @@ Shader "Diorama/URP_Grass_3DVolume"
                 OUT.positionCS = TransformWorldToHClip(worldPos);
                 OUT.positionWS = worldPos;
                 OUT.uv = IN.uv;
+                OUT.shadowCoord = TransformWorldToShadowCoord(worldPos);
 
                 // Fix Normals cho mặt sau của lá cỏ (luôn hướng lên trên để đón ánh sáng mặt trời)
                 OUT.normalWS = float3(0, 1, 0);
@@ -90,15 +96,81 @@ Shader "Diorama/URP_Grass_3DVolume"
                 half4 texColor = tex2D(_BaseMap, IN.uv);
                 clip(texColor.a - _Cutoff);
 
-                // 2. Tính ánh sáng sương sương cho nổi khối
-                Light mainLight = GetMainLight();
+                // 2. Tính ánh sáng sương sương cho nổi khối (có bóng đổ)
+                Light mainLight = GetMainLight(IN.shadowCoord);
                 float NdotL = saturate(dot(IN.normalWS, mainLight.direction));
-                float3 diffuse = mainLight.color * (NdotL + 0.3); // +0.3 Ambient để mặt khuất không bị đen
+                float3 diffuse = mainLight.color * (NdotL + 0.3) * mainLight.shadowAttenuation; // Nhân bóng đổ
 
                 // 3. Phối màu Texture gốc với màu Tint (để tự chỉnh cho đồng bộ với cảnh)
                 float3 finalColor = (texColor.rgb * _BaseColor.rgb) * diffuse;
 
                 return half4(finalColor, 1.0);
+            }
+            ENDHLSL
+        }
+
+        // --- PASS ĐỔ BÓNG (SHADOW CASTER) ---
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags {"LightMode" = "ShadowCaster"}
+
+            HLSLPROGRAM
+            #pragma vertex vertShadow
+            #pragma fragment fragShadow
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+            #pragma multi_compile_instancing
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+            struct Attributes
+            {
+                float4 positionOS : POSITION;
+                float2 uv : TEXCOORD0;
+                float3 normalOS : NORMAL;
+                UNITY_VERTEX_INPUT_INSTANCE_ID
+            };
+
+            struct Varyings
+            {
+                float4 positionCS : SV_POSITION;
+                float2 uv : TEXCOORD0;
+            };
+
+            sampler2D _BaseMap;
+            CBUFFER_START(UnityPerMaterial)
+                float _Cutoff;
+                float _WindSpeed;
+                float _WindStrength;
+            CBUFFER_END
+
+            Varyings vertShadow(Attributes input)
+            {
+                Varyings output;
+                UNITY_SETUP_INSTANCE_ID(input);
+
+                // Áp dụng wind effect
+                float3 worldPos = TransformObjectToWorld(input.positionOS.xyz);
+                float windX = sin(_Time.y * _WindSpeed + worldPos.x) * _WindStrength * input.uv.y;
+                float windZ = cos(_Time.y * _WindSpeed * 0.8 + worldPos.z) * _WindStrength * input.uv.y;
+
+                worldPos.x += windX;
+                worldPos.z += windZ;
+
+                output.positionCS = TransformWorldToHClip(worldPos);
+                output.uv = input.uv;
+
+                return output;
+            }
+
+            half4 fragShadow(Varyings input) : SV_Target
+            {
+                // Cắt viền alpha như forward pass
+                half4 texColor = tex2D(_BaseMap, input.uv);
+                clip(texColor.a - _Cutoff);
+                return 0;
             }
             ENDHLSL
         }

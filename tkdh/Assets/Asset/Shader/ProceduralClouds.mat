@@ -30,5 +30,5 @@ Material:
     - _Softness: 0.5
     - _Speed: 0.5
     m_Colors:
-    - _CloudColor: {r: 0.96225, g: 0.96225, b: 0.96225, a: 1}
+    - _CloudColor: {r: 0.5613125, g: 0.5613125, b: 0.5613125, a: 1}
   m_BuildTextureStacks: []

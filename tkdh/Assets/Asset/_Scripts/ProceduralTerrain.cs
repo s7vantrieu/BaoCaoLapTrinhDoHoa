@@ -163,7 +163,7 @@ public class ProceduralTerrain : MonoBehaviour
 
     void ApplyTerrainMaterial()
     {
-        if (terrainShader == null) terrainShader = Shader.Find("Standard");
+        if (terrainShader == null) terrainShader = Shader.Find("Diorama/URP_TerrainEcosystem");
         Material mat = new Material(terrainShader);
 
         if (heightMap) mat.SetTexture("_HeightMap", heightMap);
@@ -171,7 +171,7 @@ public class ProceduralTerrain : MonoBehaviour
         if (rockTex) mat.SetTexture("_RockTex", rockTex);
         if (snowTex) mat.SetTexture("_SnowTex", snowTex);
         
-        mat.SetFloat("_Height", heightMap != null ? 0f : mountainHeight);
+        mat.SetFloat("_Height", mountainHeight);
         GetComponent<MeshRenderer>().material = mat;
     }
 
