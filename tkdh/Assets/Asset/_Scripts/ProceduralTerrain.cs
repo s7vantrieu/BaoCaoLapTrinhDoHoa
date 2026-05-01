@@ -41,7 +41,7 @@ public class ProceduralTerrain : MonoBehaviour
     [Header("Cấu hình Cây (Billboard Quad)")]
     public bool generateTrees = true;
     public Material treeMaterial;
-    [Range(100, 2000)] public int treeCount = 500;
+    [Range(10, 200)] public int treeCount = 20;
     public float minTreeScale = 2.0f;
     public float maxTreeScale = 5.0f;
     public bool clusterTrees = true;

@@ -366,9 +366,9 @@ MonoBehaviour:
   grassYOffset: -1
   generateTrees: 1
   treeMaterial: {fileID: 2100000, guid: 67954296c521598459c0dbd7cdc41ac9, type: 2}
-  treeCount: 100
+  treeCount: 10
   minTreeScale: 2
-  maxTreeScale: 10
+  maxTreeScale: 20
   clusterTrees: 1
 --- !u!23 &281058371
 MeshRenderer:
