@@ -36,7 +36,19 @@ public class ProceduralTerrain : MonoBehaviour
     public Material grassMaterial; 
     [Range(1000, 20000)] public int grassCount = 10000;
     public float grassSize = 1.0f;
-    [Range(-5f, 5f)] public float grassYOffset = 0f; 
+    [Range(-5f, 5f)] public float grassYOffset = 0f;
+
+    [Header("Cấu hình Cây (Billboard Quad)")]
+    public bool generateTrees = true;
+    public Material treeMaterial;
+    [Range(100, 2000)] public int treeCount = 500;
+    public float minTreeScale = 2.0f;
+    public float maxTreeScale = 5.0f;
+    public bool clusterTrees = true;
+
+    private List<Matrix4x4[]> treeBatches;
+    private Mesh treeBillboardMesh;
+    private MaterialPropertyBlock treePropertyBlock;
 
     private Mesh terrainMesh;
 
@@ -63,6 +75,9 @@ public class ProceduralTerrain : MonoBehaviour
 
         // 4. Trồng Cỏ
         if (generateGrass) GenerateGrassInstanced();
+
+        // 5.Trong cay
+        if (generateTrees) GenerateTreesInstanced();
     }
 
     // --- THUẬT TOÁN SINH ĐẢO THEO SEED ---
@@ -316,6 +331,12 @@ public class ProceduralTerrain : MonoBehaviour
         if (grassBatches == null || singleGrassMesh == null || grassMaterial == null) return;
         foreach (var batch in grassBatches)
             Graphics.DrawMeshInstanced(singleGrassMesh, 0, grassMaterial, batch, batch.Length, grassPropertyBlock);
+
+        if (treeBatches != null && treeBillboardMesh != null && treeMaterial != null)
+        {
+            foreach (var batch in treeBatches)
+                Graphics.DrawMeshInstanced(treeBillboardMesh, 0, treeMaterial, batch, batch.Length, treePropertyBlock);
+        }
     }
 
     float GetHeightMapValue(float worldX, float worldZ)
@@ -325,5 +346,71 @@ public class ProceduralTerrain : MonoBehaviour
         float u = Mathf.Clamp01((worldX + width * 0.5f) / width);
         float v = Mathf.Clamp01((worldZ + depth * 0.5f) / depth);
         return heightMap.GetPixelBilinear(u, v).r;
+    }
+
+    void GenerateTreesInstanced()
+    {
+        if (treeMaterial == null || heightMap == null) return;
+        treeMaterial.enableInstancing = true;
+        treeBillboardMesh = CreateBillboardQuad();
+        treePropertyBlock = new MaterialPropertyBlock();
+
+        var matrices = new List<Matrix4x4>();
+        Random.InitState(seed + 999);
+
+        int attempts = 0;
+        int maxAttempts = treeCount * 5;
+
+        while (matrices.Count < treeCount && attempts < maxAttempts)
+        {
+            attempts++;
+            float randX = Random.Range(-width / 2f, width / 2f);
+            float randZ = Random.Range(-depth / 2f, depth / 2f);
+            float hValue = GetHeightMapValue(randX, randZ);
+            float yPos = hValue * mountainHeight;
+
+            if (yPos < waterLevel + 0.2f || hValue > 0.4f) continue;
+
+            if (clusterTrees)
+            {
+                float treeNoise = Mathf.PerlinNoise(randX * 0.1f + seed, randZ * 0.1f + seed);
+                if (treeNoise < 0.45f) continue;
+            }
+
+            float scale = Random.Range(minTreeScale, maxTreeScale);
+            matrices.Add(Matrix4x4.TRS(
+                new Vector3(randX, yPos, randZ),
+                Quaternion.identity,
+                Vector3.one * scale
+            ));
+        }
+
+        treeBatches = new List<Matrix4x4[]>();
+        for (int i = 0; i < matrices.Count; i += INSTANCED_BATCH_SIZE)
+        {
+            int count = Mathf.Min(INSTANCED_BATCH_SIZE, matrices.Count - i);
+            var batch = new Matrix4x4[count];
+            matrices.CopyTo(i, batch, 0, count);
+            treeBatches.Add(batch);
+        }
+    }
+
+    Mesh CreateBillboardQuad()
+    {
+        float hw = 0.5f, h = 1.0f;
+        var verts = new Vector3[] {
+            new Vector3(-hw, 0f, 0f), new Vector3(hw, 0f, 0f),
+            new Vector3(-hw, h, 0f),  new Vector3(hw, h, 0f)
+        };
+        var uvs = new Vector2[] {
+            new Vector2(0, 0), new Vector2(1, 0),
+            new Vector2(0, 1), new Vector2(1, 1)
+        };
+        var tris = new int[] { 0, 2, 1, 1, 2, 3 };
+
+        var m = new Mesh { name = "Tree_Billboard_Mesh" };
+        m.vertices = verts; m.uv = uvs; m.triangles = tris;
+        m.RecalculateNormals();
+        return m;
     }
 }
